@@ -65,7 +65,7 @@ def main(args):
             points = [np.mean(indices.transpose(), axis=1).astype(np.uint16)[::-1] for indices in index_list]
 
             for point in points:    # iterate through center points
-                x, y, z = get_ray(point, "matrixwebcam.txt")[0]  # see function
+                x, y, z = get_ray(point, "calibration/matrixwebcam.txt")[0]  # see function
 
                 # vec_angle gets angle between rays; 180/pi converts radians to degrees; copysign assigns correct sign
                 angles = (math.copysign(vec_angle([x, z], [0, 1]) * 180 / math.pi, x),

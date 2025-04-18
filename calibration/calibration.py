@@ -60,8 +60,8 @@ def main(args):
     print("\nDistortion coeffs: \n", dist)
     # print("\nrvecs: \n", rvecs)
     # print("\ntvecs: \n", tvecs)
-    np.savetxt("matrix{0}.txt".format(name), mtx)   # save to .txt files after adding set name to filepath
-    np.savetxt("dist{0}.txt".format(name), dist)
+    np.savetxt("calibration/matrix{0}.txt".format(name), mtx)   # save to .txt files after adding set name to filepath
+    # np.savetxt("calibration/dist{0}.txt".format(name), dist)  # distortion matrix doesn't seem to be helpful
     # np.savetxt("rvecs.txt", rvecs)
     # np.savetxt("tvecs.txt", tvecs)
 
