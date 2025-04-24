@@ -28,7 +28,7 @@ KERNEL_SETS["circle"] = [circle_kernel(4), circle_kernel(3), circle_kernel(4)]
 
 def main(args):
     # load dictionary of ArUco/April tags from saved file (see april_setup.py for details)
-    fs = cv.FileStorage("aruco_dict.yaml", cv.FILE_STORAGE_READ + cv.FILE_STORAGE_FORMAT_YAML)
+    fs = cv.FileStorage("markers/aruco_dict.yaml", cv.FILE_STORAGE_READ + cv.FILE_STORAGE_FORMAT_YAML)
     aruco_dict = cv.aruco.Dictionary(0, 6, 2)
     aruco_dict.readDictionary(fs.root())
 
