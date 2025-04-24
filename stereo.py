@@ -4,13 +4,12 @@ import cv2 as cv
 import math
 import random
 
-WIDTH = 320     # width of EACH webcam
+WIDTH = 320     # width of EACH camera (not combined)
 HEIGHT = 240
 
-PURPLE_MIN = np.array([110, 65, 35])        # adjusted for my home use
+PURPLE_MIN = np.array([110, 65, 35])        # HSV value adjusted for my home use
 # PURPLE_MIN = np.array([125, 50, 50])      # adjusted for dice with good lighting
 PURPLE_MAX = np.array([150, 255, 255])
-#CENTER = [slice(HEIGHT/2 - 10, HEIGHT/2 + 10), slice(WIDTH/2 - 10, WIDTH/2 + 10)]  # center pixels of each cam
 CENTER = [slice(110, 130), slice(150, 170)]  # center pixels of stereo cam
 
 MIN_AREA = 50           # minimum pixel area of purple region to be visible
@@ -35,35 +34,36 @@ KERNEL_SETS["circle"] = [circle_kernel(4), circle_kernel(3), circle_kernel(4)]
 
 
 def main(args):
-    cap = cv.VideoCapture(0)
+    cap = cv.VideoCapture(0)    # adjust this as needed based on camera connection order
     if not cap.isOpened():
         print("Cannot open camera")
         exit()
 
-    cooldown = 0
-    slow = True  # whether info and frames are updated on 25-frame cooldown or on every frame
+    slow = True  # "slow mode" that prints and advances frames on delay
+    cooldown = 0    # delay between frame advances (in ticks) in "slow mode"
     print_stats = False
 
     while True:
-        # cv.waitKey(-1)         # uncomment to go frame-by-frame
+        # cv.waitKey(-1)         # uncomment to go frame-by-frame (alternative to slow mode)
         ret, frame = cap.read()
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
             break
 
+        # split frame into halves
         frames = [frame[:,:WIDTH,:], frame[:,WIDTH:,:]]
         masks = [purple_mask(frames[0], show=False, kernel="circle"), purple_mask(frames[1], show=False, kernel="circle")]  # see function
         outs = [cv.bitwise_and(frames[0], frames[0], mask=masks[0]), cv.bitwise_and(frames[1], frames[1], mask=masks[1])]  # applies mask
+        # get connected areas in the mask (i.e., get distinct objects)
+        components = (cv.connectedComponentsWithStats(masks[0]), cv.connectedComponentsWithStats(masks[1]))
 
-        components = (cv.connectedComponentsWithStats(masks[0]), cv.connectedComponentsWithStats(masks[1]))  # get connected areas in the mask (i.e., get distinct objects)
+        (NL, NR) = (components[0][0] - 1, components[1][0] - 1)     # number of purple regions in each camera (exclude background)
+        dataL = []; dataR = []      # array of Region objects from each camera
 
-        (NL, NR) = (components[0][0] - 1, components[1][0] - 1)     # number of purple regions in each camera
-        dataL = []; dataR = []      # array of regions in each camera
-
-        # regions in each camera
+        # iterate through found "components"; i=0 is our background
         for i in range(1, NL + 1):
-            pixels = np.argwhere(components[0][1] == i)
-            # commented out for poor performance
+            pixels = np.argwhere(components[0][1] == i)     # list of pixel coordinates in the component
+            # color code is commented out for poor performance
             #color = np.mean([frames[0][j][k] for j in range(HEIGHT) for k in range(WIDTH)], axis=0)
             dataL.append(Region(pixels, components[0][2][i], components[0][3][i]))
 
@@ -75,9 +75,10 @@ def main(args):
         dataL = [r for r in dataL if r.area > MIN_AREA]         # filter out very small areas
         dataR = [r for r in dataR if r.area > MIN_AREA]
 
-        (dataL, dataR) = match(dataL, dataR)
-        data = (dataL, dataR)
+        (dataL, dataR) = match(dataL, dataR)        # re-order region lists to align
+        data = (dataL, dataR)               # combine into one tuple
 
+        # loop to mark matched regions
         for i in range(max(len(data[0]), len(data[1]))):      # for each potential region in halves
             for half in (0,1):      # print individually for left and right halves
                 if i >= len(data[half]):
@@ -85,17 +86,19 @@ def main(args):
 
                 region = data[half][i]
                 point = [int(c) for c in region.centroid]
-                (left, top, width, height) = region.position
-                cv.rectangle(frames[half], (left, top), (left+width, top+height), random_color(i))      # mark bounding box with set-seed random color
+                (left, top, width, height) = region.position    # unpack position tuple
+                # mark bounding box with set-seed random color; confirms object matching
+                cv.rectangle(frames[half], (left, top), (left+width, top+height), random_color(i))
                 cv.rectangle(outs[half], (left, top), (left+width, top+height), random_color(i))
 
-                angles = get_cam_angles(region.centroid)
-
-                if print_stats >= 1:
+                if print_stats >= 1:    # always circle each object
                     cv.circle(frames[half], (point[0], point[1]), 3, random_color(i), cv.FILLED)
                     cv.circle(outs[half], (point[0], point[1]), 3, random_color(i), cv.FILLED)
 
-                if print_stats == 1:
+                if print_stats == 1:    # if angle printing is on
+                    # get x and y angles to the object
+                    angles = get_cam_angles(region.centroid)
+
                     anglestr = "(" + str(round(angles[0], 2)) + ", " + str(round(angles[1], 2)) + ")"  # formats/rounds
 
                     cv.putText(frames[half], anglestr, [region.left, region.top], cv.FONT_HERSHEY_SIMPLEX,
@@ -104,9 +107,9 @@ def main(args):
                                math.sqrt(region.area) / 50, random_color(i), lineType=cv.LINE_AA)
 
 
-            if i < len(data[0]) and i < len(data[1]):   # if region is in both halves
+            if i < min(len(data[0]), len(data[1])):   # if this region is in both halves
                 distance = round(get_object_distance(data[0][i], data[1][i], 0.5), 2)
-                if print_stats == 2:
+                if print_stats == 2:    # if distance printing is on
                     cv.circle(frames[half], (point[0], point[1]), 3, random_color(i), cv.FILLED)
                     cv.circle(outs[half], (point[0], point[1]), 3, random_color(i), cv.FILLED)
 
